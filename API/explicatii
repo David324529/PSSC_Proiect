@@ -1,0 +1,46 @@
+1. Comunicare între Controller și Workflow-uri
+Controllerul OrdersController gestionează cererile HTTP pentru plasarea comenzilor.
+La primirea unui request, controllerul apelează direct PlasareComandaWorkflow, care gestionează toate etapele procesării comenzii.
+Fluxul comunicării:
+
+Request HTTP (sincron) →
+Utilizatorul trimite un POST către /api/Orders/place-order.
+
+OrdersController →
+Prinde requestul și apelează metoda Execute din PlasareComandaWorkflow.
+
+PlasareComandaWorkflow →
+Parcurge pașii de procesare a comenzii prin apeluri sincrone către operații.
+
+2. Comunicare între Workflow-uri și Operații
+PlasareComandaWorkflow apelează, în ordine, următoarele operații, fiecare depinzând de rezultatul celei anterioare:
+
+ValidateOrderOperation – Verifică validitatea comenzii.
+CalculateOrderOperation – Calculează prețul total.
+PublishOrderOperation – Salvează comanda în baza de date.
+InvoiceOrderOperation – Generează factura și AWB-ul pentru livrare.
+ShipOrderOperation – Marchează comanda ca fiind livrată.
+⚠️ Fiecare pas este sincronic. Dacă un pas eșuează, următorii pași nu mai sunt executați.
+
+3. Comunicare între Operații și Repozitorii
+Operațiile utilizează Repozitorii pentru a accesa sau modifica datele în baza de date. De exemplu:
+
+PublishOrderOperation → apelează OrderRepository pentru a salva comanda.
+InvoiceOrderOperation → apelează InvoiceRepository pentru a genera factura.
+ShipOrderOperation → apelează ShipmentRepository pentru a crea AWB-ul de livrare.
+Exemplu de flux:
+
+Operație: PublishOrderOperation →
+Repozitoriu: OrderRepository.AddOrderAsync() →
+Baza de date: Salvează comanda.
+⚠️ Și aceste apeluri sunt sincrone (.Wait() sau await), ceea ce înseamnă că fiecare pas așteaptă finalizarea completă a operației înainte de a continua.
+
+4. Comunicare între Controller și Clientul HTTP
+Anterior, componenta ShoppingApiClient realiza apeluri HTTP către alte servicii, dar acum, prin eliminarea coșului, comunicarea se face direct între utilizator și OrdersController.
+
+Dacă era necesară integrarea cu alte servicii externe, apelurile HTTP erau gestionate prin HttpClient (asincron), dar în fluxul actual nu mai este cazul.
+
+Tipul de Comunicare
+Intern: Sincronă (await sau .Result) între Controller → Workflow → Operații → Repozitorii.
+Extern: Dacă ar fi existat apeluri externe, acestea ar fi fost asincrone cu HttpClient.
+⚠️ Dezavantaj: În cazul unui blocaj într-o operație, aplicația va aștepta răspunsul, ceea ce poate încetini procesul.
